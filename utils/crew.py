@@ -7,11 +7,12 @@ from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 from crewai.tasks.task_output import TaskOutput
 from crewai_tools.tools import FileReadTool
-from utils.config import candidate_name, resume_name, resume_template,default_job_title,default_skills_summary,default_location,llm_model,create_pdf,resume_sections_to_update
+from utils.config import candidate_name, resume_name, resume_template, default_job_title, default_skills_summary, \
+    default_location, llm_model, create_pdf, resume_sections_to_update
 
-        
+
 class ReadDescription():
-        
+
     @tool("Read Description Tool")
     def read_description(job_index, file_path):
         """Read a specific job description from an array in a file."""
@@ -19,24 +20,29 @@ class ReadDescription():
         with open(file_path, 'r') as file:
             content = json.load(file)
             return content[job_index]
-            
 
-            
+
 class JobSearchCrewManager:
     def __init__(self, job_index):
         load_dotenv()
-        self.llm = ChatOpenAI(model=llm_model)
+        # self.llm = ChatOpenAI(model=llm_model)
+        self.llm = ChatOpenAI(
+            base_url="https://api.together.xyz/v1",
+            api_key=os.getenv('TOGETHER_APIKEY'),
+            temperature=0.5,
+            model="mistralai/Mistral-7B-Instruct-v0.2",
+            max_tokens=400)
         self.default_resume_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'default_resume')
         self.resume_md_name = os.path.splitext(resume_name)[0] + '.md'
         self.resume_read_tool = FileReadTool(file_path=os.path.join(self.default_resume_folder, self.resume_md_name))
-        self.job_details = {'job_title': "unknown",'company_name': "unknown", "job_location": default_location} #initialize job details
+        self.job_details = {'job_title': "unknown", 'company_name': "unknown",
+                            "job_location": default_location}  # initialize job details
         self.job_index = job_index  # Store the job indices
         print(f"Job indices: {job_index}")
-       
+
         self.read_description_tool = ReadDescription.read_description
 
         self.output_file = "output.json"
-
 
     def create_custom_resume_docx(self, template_path, new_file_path, job_title, summary, job_location):
         doc = Document(template_path)
@@ -50,13 +56,12 @@ class JobSearchCrewManager:
                     run.text = run.text.replace('{LOCATION}', job_location)
         doc.save(new_file_path)
 
-
     def convert_docx_to_pdf(self, docx_path, pdf_path):
         import subprocess
         cmd = ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', os.path.dirname(pdf_path), docx_path]
         subprocess.run(cmd, check=True)
 
-    def job_callback_function(self,output: TaskOutput):
+    def job_callback_function(self, output: TaskOutput):
         global job_details  # Indicate that we're using the global variable
         content = output.raw_output
 
@@ -68,7 +73,8 @@ class JobSearchCrewManager:
         company_industry = "unknown"  # Default value
         salary_range = "unknown"  # Default value
 
-        lines = [line.strip() for line in content.splitlines()] # Split the content into lines and remove leading/trailing whitespace
+        lines = [line.strip() for line in
+                 content.splitlines()]  # Split the content into lines and remove leading/trailing whitespace
 
         for line in lines:
             if line.startswith("Job Title:"):
@@ -86,7 +92,6 @@ class JobSearchCrewManager:
             elif line.startswith("Salary Range:"):
                 salary_range = line.replace("Salary Range:", "").strip()
 
-
         # If job_title or company_name  or job_location were not found, set them as 'unknown'
         job_title = job_title if job_title is not None else 'unknown'
         company_name = company_name if company_name is not None else 'unknown'
@@ -95,8 +100,6 @@ class JobSearchCrewManager:
         role_discipline = role_discipline if role_discipline is not None else 'unknown'
         company_industry = company_industry if company_industry is not None else 'unknown'
         salary_range = salary_range if salary_range is not None else 'unknown'
-
-
 
         # Store the extracted values in the global dictionary
         self.job_details['job_title'] = job_title
@@ -113,11 +116,11 @@ class JobSearchCrewManager:
         print(f"Extracted Job Location: {job_location}")
 
         company_name = str(company_name)  # Convert to string if it's not
-        job_title = str(job_title)        # Convert to string if it's not
+        job_title = str(job_title)  # Convert to string if it's not
         job_location = str(job_location)  # Convert to string if it's not
 
         # Create a folder with the company name and a nested folder with the job title
-        nested_folder_path = os.path.join(os.getcwd(), "jobs",company_name, job_title)
+        nested_folder_path = os.path.join(os.getcwd(), "jobs", company_name, job_title)
         os.makedirs(nested_folder_path, exist_ok=True)  # Avoids error if the folder already exists
 
         # Define the file path for the job description summary inside the nested folder
@@ -131,18 +134,18 @@ class JobSearchCrewManager:
         except IOError as e:
             print(f"Failed to write file {file_path}: {e}")
 
-    def candidate_callback_function(self,output: TaskOutput):
+    def candidate_callback_function(self, output: TaskOutput):
         global job_details  # Ensure we're using the global dictionary
 
         # Extract the raw output from the task
         content = output.raw_output
 
-    # Retrieve company name and job title from the global dictionary, replace with "unknown" if missing
+        # Retrieve company name and job title from the global dictionary, replace with "unknown" if missing
         company_name = self.job_details.get('company_name', 'unknown')
         job_title = self.job_details.get('job_title', 'unknown')
 
         # Construct the nested folder path using company name and job title
-        nested_folder_path = os.path.join(os.getcwd(),"jobs", company_name, job_title)
+        nested_folder_path = os.path.join(os.getcwd(), "jobs", company_name, job_title)
 
         # Check if the nested folder path exists
         if not os.path.exists(nested_folder_path):
@@ -160,12 +163,12 @@ class JobSearchCrewManager:
         except IOError as e:
             print(f"Failed to write file {file_path}: {e}")
 
-    def resume_callback_function(self,output: TaskOutput):
+    def resume_callback_function(self, output: TaskOutput):
         global job_details  # Ensure we're using the global dictionary
 
-        print(self.job_details.get('company_name','unknown'))
-        print(self.job_details.get('job_title','unknown'))
-        print(self.job_details.get('job_location','unknown'))
+        print(self.job_details.get('company_name', 'unknown'))
+        print(self.job_details.get('job_title', 'unknown'))
+        print(self.job_details.get('job_location', 'unknown'))
 
         # Extract the raw output from the task
         content = output.raw_output
@@ -195,7 +198,8 @@ class JobSearchCrewManager:
             print(f"Failed to write file {file_path}: {e}")
 
         # Define the file path for the custom resume inside the nested folder
-        custom_resume_path = os.path.join(nested_folder_path, f"Resume - {candidate_name} - {company_name} - {job_title}.docx")
+        custom_resume_path = os.path.join(nested_folder_path,
+                                          f"Resume - {candidate_name} - {company_name} - {job_title}.docx")
 
         # Define the path to the default_resume folder relative to this script
         template_path = os.path.join(self.default_resume_folder, resume_template)
@@ -231,7 +235,8 @@ class JobSearchCrewManager:
         if summary_index is not None:
             if len(lines[summary_index].split(":")) > 1:
                 # Summary is on the same line as "Summary:"
-                extracted_summary = lines[summary_index].split(":", 1)[1].strip() + "\n" + "\n".join(lines[summary_index + 1:])
+                extracted_summary = lines[summary_index].split(":", 1)[1].strip() + "\n" + "\n".join(
+                    lines[summary_index + 1:])
             else:
                 # Summary starts from the next line or two lines after
                 extracted_summary = "\n".join(lines[summary_index + 1:])
@@ -240,7 +245,8 @@ class JobSearchCrewManager:
         extracted_summary = "\n".join([line for line in extracted_summary.splitlines() if line.strip()])
 
         # Create the custom resume DOCX file
-        self.create_custom_resume_docx(template_path, custom_resume_path, extracted_job_title, extracted_summary, job_location)
+        self.create_custom_resume_docx(template_path, custom_resume_path, extracted_job_title, extracted_summary,
+                                       job_location)
 
         if create_pdf:
             # New code to convert DOCX to PDF
@@ -249,21 +255,21 @@ class JobSearchCrewManager:
 
         print(f"Custom resume saved to {custom_resume_path}")
 
-    def coverletter_callback_function(self,output: TaskOutput):
+    def coverletter_callback_function(self, output: TaskOutput):
         global job_details  # Ensure we're using the global dictionary
 
-        print(self.job_details.get('company_name','unknown'))
-        print(self.job_details.get('job_title','unknown'))
+        print(self.job_details.get('company_name', 'unknown'))
+        print(self.job_details.get('job_title', 'unknown'))
 
         # Extract the raw output from the task
         content = output.raw_output
 
-    # Retrieve company name and job title from the global dictionary, replace with "unknown" if missing
+        # Retrieve company name and job title from the global dictionary, replace with "unknown" if missing
         company_name = self.job_details.get('company_name', 'unknown')
         job_title = self.job_details.get('job_title', 'unknown')
 
         # Construct the nested folder path using company name and job title
-        nested_folder_path = os.path.join(os.getcwd(), "jobs",company_name, job_title)
+        nested_folder_path = os.path.join(os.getcwd(), "jobs", company_name, job_title)
 
         # Check if the nested folder path exists
         if not os.path.exists(nested_folder_path):
@@ -275,10 +281,9 @@ class JobSearchCrewManager:
         # Define the file path for the cover letter inside the nested folder
         file_path = os.path.join(nested_folder_path, filename)
 
-
         # Create a new Word document
         doc = Document()
-        
+
         # Modify the cover letter content to start with "Dear Hiring Manager,"
         # and remove any content before that if it exists
         content = output.raw_output
@@ -287,21 +292,21 @@ class JobSearchCrewManager:
             content = content[start_index:]
         else:
             content = "Dear Hiring Manager,\n" + content
-        
+
         # Split the content into lines
         lines = content.splitlines()
-        
+
         # Check if the last line ends with ,,,
         if lines[-1].endswith("```"):
             # Remove the ,,, from the last line
             lines[-1] = lines[-1][:-3]
-        
+
         # Reconstruct the content without ,,, on the last line
         content = "\n".join(lines)
 
         # Add the modified cover letter content to the document
         doc.add_paragraph(content)
-        
+
         # Save the document
         doc.save(file_path)
 
@@ -321,11 +326,10 @@ class JobSearchCrewManager:
         except IOError as e:
             print(f"Failed to write file {file_path}: {e}")
 
-
     def setup_agents_and_tasks(self):
-      
+
         job_description_expert = Agent(
-            role='Analyze  Job Description',
+            role='Analyze Job Description',
             goal='Analyze the job description to understand the company industry, role seniority level, main responsibilities, and identify the key skills required.',
             backstory="""You are expert in analyzing job descriptions and identifying the key skills required for the job""",
             verbose=True,
@@ -333,18 +337,21 @@ class JobSearchCrewManager:
             allow_delegation=True,
             # tools=[description_read_tool]
             tools=[self.read_description_tool],
-            memory=True
+            memory=True,
+            max_iter=17
         )
 
         resume_expert = Agent(
-            role='Analyze  Candidates\'s Resume',
+            role='Analyze Candidates\'s Resume',
             goal='Analyze a candidate\'s resume and highlight the key skills and achievements',
             backstory="""You are expert in analyzing resumes and identifying the key skills and achievements""",
             verbose=True,
             llm=self.llm,
             allow_delegation=True,
             tools=[self.resume_read_tool],
-             memory=True
+            memory=True,
+            max_iter=17
+
         )
 
         resume_writer = Agent(
@@ -355,7 +362,8 @@ class JobSearchCrewManager:
             llm=self.llm,
             tools=[self.resume_read_tool],
             allow_delegation=True,
-            memory=True
+            memory=True,
+            max_iter=17
         )
 
         # Define tasks for your agents
@@ -364,8 +372,10 @@ class JobSearchCrewManager:
             Job Title: <title>\n\n Responsibilities: <requirements>\n\n Skills: <skills>\n\n Company Industry: <industry>\n\n Role Seniority: <seniority>\n\n Role Discipline: <discipline>\n\n Salary Range: <range>""",
             agent=job_description_expert,
             # tools=[description_read_tool]
-            tools=[self.read_description_tool],       
+            tools=[self.read_description_tool],
             callback=self.job_callback_function,
+            expected_output="",
+
             # output_file="job_d
         )
 
@@ -375,13 +385,14 @@ class JobSearchCrewManager:
             context=[job_description_task],
             tools=[self.resume_read_tool],
             # output_file="candidate_skills_summary.txt",
+            expected_output="",
             callback=self.candidate_callback_function
         )
 
         resume_writing_task = Task(
             description=f"""Write a resume summary section that highlights {candidate_name}'s hard and soft skills. Try to highlight skills and keywords that match the job description. Do not make up skills or summary that do not truthfully represent {candidate_name}'s strength. The summary paragraph is about 5 sentences. Do not be too verbose, and make the sentences impactful, and do not use cliche words. When using sentences from {candidate_name}'s resume in the summary, do not copy word for word. But when applicable, it is ok to use exact keywords from the job description to show that the candidate is a great fit. Also Select a job title that closely matches the job title in the job description. The desired job title is 1-5 words. You must follow the format: Job Title: <title>\n\n Summary: <Summary>""",
             agent=resume_writer,
-            
+            expected_output="",
             context=[job_description_task, candidate_skills_task],
             # output_file="resume_summary.txt",
             callback=self.resume_callback_function
@@ -392,26 +403,28 @@ class JobSearchCrewManager:
             agent=resume_writer,
             context=[job_description_task, candidate_skills_task],
             # output_file="cover_letter.txt",
-            callback=self.coverletter_callback_function
+            callback=self.coverletter_callback_function,
+            expected_output="",
+
         )
 
         # Set up your crew with a sequential process (tasks executed sequentially by default)
         job_search_crew = Crew(
-            agents=[job_description_expert, resume_expert,resume_writer],
-            tasks=[ job_description_task, candidate_skills_task, resume_writing_task, coverletter_writing_task],
+            agents=[job_description_expert, resume_expert, resume_writer],
+            tasks=[job_description_task, candidate_skills_task, resume_writing_task, coverletter_writing_task],
             process=Process.sequential,
             manager_llm=self.llm,
         )
         return job_search_crew
 
-
     def kickoff(self):
-        crew_result =self.setup_agents_and_tasks().kickoff()
+        crew_result = self.setup_agents_and_tasks().kickoff()
         print(crew_result)
 
         return self.job_details
 
+
 if __name__ == "__main__":
-    job_index= 0  # Example list of indices
+    job_index = 0  # Example list of indices
     manager = JobSearchCrewManager(job_index)
     manager.kickoff()

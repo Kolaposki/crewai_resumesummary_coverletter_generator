@@ -6,7 +6,6 @@ from utils.scrape_jobs import scrape_jobs
 from utils.crew import JobSearchCrewManager
 from utils.config import notion_config, scrape_config
 
-
 # Run error checks
 check_errors()
 
@@ -18,12 +17,10 @@ if scrape_config.get("perform_scrape", False):
     # Scrape the job description from the website
     scrape_jobs()
 
-
 # Read output.json to get the list of job descriptions
 output_file_path = 'output.json'
 with open(output_file_path, 'r') as file:
     job_descriptions = json.load(file)
-
 
 # Check if job_descriptions is a non-empty list
 if not isinstance(job_descriptions, list) or not job_descriptions:
@@ -38,7 +35,6 @@ for job_index, job_description in enumerate(job_descriptions):
     # Execute the job search process
     job_details = manager.kickoff()
 
-
     # Check if save_to_notion is set to True, if NOTION_INTEGRATION_TOKEN is set, and if database_id is provided
     if notion_config.get("save_to_notion", False):
         # Extract job_url from the current job description, if it exists
@@ -52,4 +48,5 @@ for job_index, job_description in enumerate(job_descriptions):
         role_seniority = job_details.get('role_seniority', 'unknown')
         role_discipline = job_details.get('role_discipline', 'unknown')
         # Update Notion database for each job
-        create_notion_database_page(job_title, company_name, company_industry, salary_range, job_url, job_location, role_seniority, role_discipline)
+        create_notion_database_page(job_title, company_name, company_industry, salary_range, job_url, job_location,
+                                    role_seniority, role_discipline)

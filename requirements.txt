@@ -5,3 +5,4 @@ python-dotenv
 crewai
 langchain-openai
 notion-client
+# pip install 'crewai[tools]'
